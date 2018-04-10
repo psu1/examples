@@ -86,7 +86,17 @@ def main():
     else:
         model.cuda()
         model = torch.nn.parallel.DistributedDataParallel(model)
-
+    
+    # show total parameters of the model
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print('pytorch_total_params', pytorch_total_params)
+    
+    #visulize model
+    print('modle overview', model)
+    for name, parameter in net.named_parameters():
+        if parameter.requires_grad:
+            print(name, parameter.shape)
+            
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
