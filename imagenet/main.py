@@ -15,6 +15,8 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 
+from logger import Logger
+
 # how many GPUs you want to use to train the modle.
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"]= '0,1,2,3,4,5,6,7'
@@ -165,7 +167,11 @@ def main():
     if args.evaluate:
         validate(val_loader, model, criterion)
         return
+    
+    # ====== Set the logger for train and validate ======
+    logger = Logger(args.logdir)
 
+    # ============MODEL TRAINING============
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
@@ -237,6 +243,20 @@ def train(train_loader, model, criterion, optimizer, epoch):
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
 
+        # ============ TensorBoard logging ============
+        # (1) Log the scalar values
+        info = {
+            'train_loss': losses.avg
+        }
+
+        for tag, value in info.items():
+            logger.scalar_summary(tag, value, epoch+1)
+
+        # (2) Log values and gradients of the parameters (histogram)
+        for tag, value in model.named_parameters():
+            tag = tag.replace('.', '/')
+            logger.histo_summary(tag, to_np(value), epoch+1)
+            logger.histo_summary(tag+'/grad', to_np(value.grad), epoch+1)
 
 def validate(val_loader, model, criterion):
     batch_time = AverageMeter()
@@ -276,8 +296,23 @@ def validate(val_loader, model, criterion):
                    i, len(val_loader), batch_time=batch_time, loss=losses,
                    top1=top1, top5=top5))
 
-    print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
+        print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f}'
           .format(top1=top1, top5=top5))
+        
+        # ============ TensorBoard logging ============
+        # (1) Log the scalar values
+        info = {
+            'val_loss': losses.avg
+        }
+
+        for tag, value in info.items():
+            logger.scalar_summary(tag, value, epoch+1)
+
+        # (2) Log values and gradients of the parameters (histogram)
+        for tag, value in model.named_parameters():
+            tag = tag.replace('.', '/')
+            logger.histo_summary(tag, to_np(value), epoch+1)
+            logger.histo_summary(tag+'/grad', to_np(value.grad), epoch+1)
 
     return top1.avg
 
